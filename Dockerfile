@@ -8,10 +8,15 @@ RUN apk add --no-cache \
     py3-pip \
     build-base \
     openjdk17 \
+    openjdk21 \
     maven \
     jq \
     openssh-client \
     sudo
+
+# Default to Java 21; projects needing 17 can use Gradle/Maven toolchains
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+ENV PATH="$JAVA_HOME/bin:$PATH"
 
 RUN npm install -g @anthropic-ai/claude-code
 
