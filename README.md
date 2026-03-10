@@ -1,97 +1,104 @@
 # Claude Sandbox
 
-Run Claude Code with `--dangerously-skip-permissions` safely inside a Docker container. Only your project directory is exposed — everything else on your machine is isolated.
+A Docker container for running [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with `--dangerously-skip-permissions` in an isolated environment. Only your project directory is exposed — everything else on your machine stays safe.
 
-## Quick Start (Monday)
-
-### 1. Open Docker Desktop
-
-### 2. Open Warp terminal and run:
+## Quick Start
 
 ```bash
-# Load SSH key (Passwords app will prompt if needed)
-ssh-add ~/.ssh/your-key
-
-# Start sandbox on a project
+# Start an interactive session on a project
 claude-sandbox -w ~/projects/my-java-service
-```
 
-### 3. To control from phone:
+# One-shot task
+claude-sandbox -w ~/projects/myapp -p "fix all lint errors"
 
-```bash
+# Remote control from phone (opens a claude.ai session URL)
 claude-sandbox --remote -w ~/projects/my-java-service
 ```
 
-Open the `https://claude.ai/code/session_...` URL on your phone.
+## Usage
 
-## All Commands
+```
+claude-sandbox [OPTIONS] [CLAUDE_ARGS...]
 
-```bash
-# Interactive session in current directory
-claude-sandbox
-
-# Interactive session on a specific project
-claude-sandbox -w ~/projects/my-java-service
-
-# One-shot task (runs and exits)
-claude-sandbox -p "fix all lint errors"
-
-# Remote control from phone
-claude-sandbox --remote
-
-# Combine flags
-claude-sandbox --remote -w ~/projects/my-java-service
-claude-sandbox -w ~/projects/my-web-app -p "add unit tests for BffController"
+Options:
+  -w, --workspace PATH   Mount a specific directory (default: current directory)
+  -p 'task'              Run a one-shot task non-interactively
+  --remote               Start remote control session (control from claude.ai)
+  -h, --help             Show help
 ```
 
-## First-Time Setup (already done)
-
-Only needed once. Included here for reference if you need to redo it.
+### Examples
 
 ```bash
-# Build the image
-cd ~/.claude/claude-sandbox
-docker build -t claude-sandbox .
-
-# Add alias (already in your .zshrc)
-echo 'alias claude-sandbox="~/.claude/claude-sandbox/claude-sandbox.sh"' >> ~/.zshrc
-source ~/.zshrc
+claude-sandbox                                          # interactive in cwd
+claude-sandbox -w ~/projects/myapp                      # specific project
+claude-sandbox -p "add unit tests for UserService"      # one-shot task
+claude-sandbox --remote                                 # control from phone
+claude-sandbox --remote -w ~/projects/myapp             # combine flags
 ```
 
-### Prerequisites
+## What's Inside
 
-- Docker Desktop installed and running
-- `BITBUCKET_USER` and `BITBUCKET_TOKEN` exported (already in `.zshrc`)
-- SSH key loaded: `ssh-add ~/.ssh/your-key`
-- Logged into Claude Code (session stored in `~/.claude.json`)
+| Tool | Version |
+|------|---------|
+| Node.js | 20 (Alpine) |
+| Java | 21 (default), 17 available via toolchains |
+| Maven | latest Alpine package |
+| Python | 3.x |
+| Git, curl, jq, openssh | included |
 
-## What carries over from host
+## Host Integration
 
-| Resource | Access |
-|---|---|
-| Project files | read/write |
-| Claude settings, memory, plugins | read/write |
-| Claude auth session (`.claude.json`) | read-only (copied + patched) |
-| Maven local repo (`publishToMavenLocal`) | read/write |
-| Gradle cache + wrapper | read/write |
-| SSH auth (Bitbucket) | agent forwarding |
-| Git identity (`.gitconfig`) | read-only |
-| Bitbucket credentials | env vars |
-| GCP credentials (Artifact Registry) | read-only mount + access token + gcloud shim |
-| npm / pip cache | persisted via Docker volumes |
+The container mounts and forwards resources from your host machine:
 
-## What's isolated
+| Resource | How |
+|----------|-----|
+| Project files | read/write mount at `/workspace` |
+| Claude settings & memory | read/write mount of `~/.claude` |
+| Claude auth session | copied and patched at startup |
+| Maven local repo (`~/.m2`) | read/write mount |
+| Gradle cache (`~/.gradle`) | read/write mount |
+| SSH keys | agent forwarding (keys never leave host) |
+| Git config | read-only mount |
+| Bitbucket credentials | `BITBUCKET_USER` / `BITBUCKET_TOKEN` env vars |
+| GCP credentials | read-only mount + access token + gcloud shim |
+| npm / pip caches | persisted via Docker volumes |
+
+## Isolation
 
 The container **cannot** access:
 
 - Host filesystem outside the mounted project
-- `~/.ssh` private keys (agent forwarding used instead)
+- `~/.ssh` private keys (agent forwarding only)
 - Other projects (unless you mount a parent directory)
-- System files and configuration
+- System files and host configuration
+
+## Setup
+
+### Prerequisites
+
+- Docker Desktop installed and running
+- `BITBUCKET_USER` and `BITBUCKET_TOKEN` exported in your shell
+- SSH key loaded: `ssh-add <your-key>`
+- Logged into Claude Code on host (`~/.claude.json` exists)
+
+### Install
+
+```bash
+# Clone the repo
+git clone git@github.com:anthonygunawan/claude-sandbox.git ~/.claude/claude-sandbox
+
+# Build the image
+docker build -t claude-sandbox ~/.claude/claude-sandbox
+
+# Add alias to your shell
+echo 'alias claude-sandbox="~/.claude/claude-sandbox/claude-sandbox.sh"' >> ~/.zshrc
+source ~/.zshrc
+```
 
 ## Rebuilding
 
-Only needed after modifying `Dockerfile` or `entrypoint.sh`. Changes to `claude-sandbox.sh` take effect immediately (no rebuild needed).
+Only needed after modifying `Dockerfile` or `entrypoint.sh`. Changes to `claude-sandbox.sh` take effect immediately.
 
 ```bash
 docker build -t claude-sandbox ~/.claude/claude-sandbox
@@ -99,20 +106,16 @@ docker build -t claude-sandbox ~/.claude/claude-sandbox
 
 ## Troubleshooting
 
-**"Claude configuration file not found"** — `.claude.json` not mounted correctly. Rebuild the image.
-
-**Auth/login prompt inside container** — Your Claude session expired. Run `claude` on your Mac (outside container) to re-login, then retry the sandbox.
-
-**"Permission denied" on git push** — SSH key not loaded. Run `ssh-add ~/.ssh/your-key` on your Mac.
-
-**Gradle/Maven can't find local artifacts** — Make sure `~/.m2` and `~/.gradle` exist on your Mac. The sandbox mounts them directly.
+| Problem | Fix |
+|---------|-----|
+| "Claude configuration file not found" | Rebuild the image |
+| Auth/login prompt inside container | Run `claude` on host to re-login, then retry |
+| "Permission denied" on git push | Load SSH key: `ssh-add <your-key>` |
+| Gradle/Maven can't find local artifacts | Ensure `~/.m2` and `~/.gradle` exist on host |
 
 ## Cleanup
 
 ```bash
-# Remove cached volumes
-docker volume rm claude-npm-cache claude-pip-cache
-
-# Remove image
-docker rmi claude-sandbox
+docker volume rm claude-npm-cache claude-pip-cache   # remove cached volumes
+docker rmi claude-sandbox                            # remove image
 ```
