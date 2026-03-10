@@ -50,6 +50,19 @@ if [[ -n "${HOST_HOME_PATH:-}" && ! -e "$HOST_HOME_PATH" ]]; then
     sudo ln -sfn "$CLAUDE_HOME" "$HOST_HOME_PATH"
 fi
 
-# 5. Run Claude — supports both interactive and remote-control modes
+# 5. GCP gcloud shim — build plugins that shell out to gcloud get a working response
+if [[ -n "${GCP_ACCESS_TOKEN:-}" ]]; then
+    sudo tee /usr/local/bin/gcloud > /dev/null << 'SHIM'
+#!/bin/bash
+case "$*" in
+    *"auth print-access-token"*|*"auth application-default print-access-token"*)
+        echo "$GCP_ACCESS_TOKEN";;
+    *) echo "gcloud shim: unsupported command: $*" >&2; exit 1;;
+esac
+SHIM
+    sudo chmod +x /usr/local/bin/gcloud
+fi
+
+# 6. Run Claude — supports both interactive and remote-control modes
 #    CLAUDE_CMD is set by the shell script (default: "claude --dangerously-skip-permissions")
 exec ${CLAUDE_CMD:-claude --dangerously-skip-permissions} "$@"

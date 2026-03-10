@@ -76,6 +76,9 @@ MOUNTS=(
 [[ -d "$HOME/.m2" ]] && MOUNTS+=(-v "$HOME/.m2:$CLAUDE_HOME/.m2")
 [[ -d "$HOME/.gradle" ]] && MOUNTS+=(-v "$HOME/.gradle:$CLAUDE_HOME/.gradle")
 
+# GCP Application Default Credentials — for Artifact Registry, etc.
+[[ -d "$HOME/.config/gcloud" ]] && MOUNTS+=(-v "$HOME/.config/gcloud:$CLAUDE_HOME/.config/gcloud:ro")
+
 # SSH agent forwarding — private key stays on host, passphrase via macOS Passwords app
 MOUNTS+=(-v /run/host-services/ssh-auth.sock:/ssh-auth.sock)
 
@@ -95,6 +98,15 @@ ENV_VARS=(
 # Bitbucket credentials for HTTPS/API access
 [[ -n "${BITBUCKET_USER:-}" ]] && ENV_VARS+=(-e BITBUCKET_USER="$BITBUCKET_USER")
 [[ -n "${BITBUCKET_TOKEN:-}" ]] && ENV_VARS+=(-e BITBUCKET_TOKEN="$BITBUCKET_TOKEN")
+
+# GCP: pass access token and ADC path for Artifact Registry auth inside container
+if command -v gcloud &>/dev/null; then
+    GCP_TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
+    [[ -n "$GCP_TOKEN" ]] && ENV_VARS+=(-e "GCP_ACCESS_TOKEN=$GCP_TOKEN")
+fi
+if [[ -f "$HOME/.config/gcloud/application_default_credentials.json" ]]; then
+    ENV_VARS+=(-e "GOOGLE_APPLICATION_CREDENTIALS=$CLAUDE_HOME/.config/gcloud/application_default_credentials.json")
+fi
 
 echo "Sandbox: ${WORKSPACE##*/}"
 
